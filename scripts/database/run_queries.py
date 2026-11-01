@@ -1,5 +1,5 @@
 """
-run_queries.py - Chay 10 cau truy van SQL Q01-Q10 va xuat bao cao Markdown.
+run_queries.py - Chạy 8 câu truy vấn SQL Q01-Q08 và xuất báo cáo Markdown.
 Nhom: ADY291c-AI2107-Group2
 """
 
@@ -19,7 +19,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-DB_PATH = BASE_DIR / "data" / "olist.db"
+DB_PATH = BASE_DIR / "scripts" / "database" / "olist.db"
 SQL_PATH = BASE_DIR / "sql" / "03_queries.sql"
 REPORT_PATH = BASE_DIR / "data" / "processed" / "sql_business_report.md"
 
@@ -48,6 +48,16 @@ def run_query(conn, title, sql, max_rows=50):
     return df
 
 
+def export_report(reports, report_path):
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    sections = ["# Báo cáo truy vấn SQL Q01-Q08 - Olist\n"]
+    for title, dataframe in reports:
+        sections.append(f"\n## {title}\n")
+        sections.append(f"\nSố dòng kết quả: {len(dataframe)}\n")
+        sections.append("\n" + dataframe.to_markdown(index=False) + "\n")
+    report_path.write_text("".join(sections), encoding="utf-8")
+
+
 
 
 def initialize_views(conn):
@@ -58,75 +68,7 @@ def initialize_views(conn):
 
 QUERIES = [
     (
-        "Q01: Ngay le va dip dac biet co lam luong mua tang?",
-        """
-        WITH special_dates(special_date, special_name) AS (
-            VALUES
-                ('2017-02-27','Carnival'), ('2017-02-28','Carnival'),
-                ('2017-11-24','Black Friday'), ('2017-12-25','Giang sinh'),
-                ('2018-02-12','Carnival'), ('2018-02-13','Carnival'),
-                ('2018-03-30','Good Friday'), ('2018-05-31','Corpus Christi'),
-                ('2018-11-23','Black Friday'), ('2018-12-25','Giang sinh')
-        ),
-        daily_orders AS (
-            SELECT date(order_purchase_timestamp) AS purchase_date,
-                   COUNT(DISTINCT order_id) AS order_count
-            FROM orders
-            GROUP BY date(order_purchase_timestamp)
-        ),
-        normal_by_year AS (
-            SELECT substr(purchase_date, 1, 4) AS purchase_year,
-                   AVG(order_count) AS avg_order_count
-            FROM daily_orders
-            WHERE purchase_date NOT IN (
-                SELECT special_date FROM special_dates
-            )
-            GROUP BY substr(purchase_date, 1, 4)
-        )
-        SELECT d.purchase_date,
-               s.special_name,
-               d.order_count,
-               ROUND(n.avg_order_count, 2) AS avg_normal_orders,
-               ROUND(100.0 * (d.order_count - n.avg_order_count)
-                     / NULLIF(n.avg_order_count, 0), 2) AS pct_vs_normal_days
-        FROM daily_orders d
-        JOIN special_dates s ON s.special_date = d.purchase_date
-        JOIN normal_by_year n
-          ON n.purchase_year = substr(d.purchase_date, 1, 4)
-        ORDER BY d.order_count DESC, d.purchase_date;
-        """,
-    ),
-    (
-        "Q02: Phat hien ngay dot bien doanh so",
-        """
-        WITH daily_orders AS (
-            SELECT date(order_purchase_timestamp) AS purchase_date,
-                   COUNT(DISTINCT order_id) AS order_count
-            FROM orders
-            GROUP BY date(order_purchase_timestamp)
-        ),
-        baseline AS (
-            SELECT purchase_date,
-                   order_count,
-                   AVG(order_count) OVER (
-                       ORDER BY purchase_date
-                       ROWS BETWEEN 28 PRECEDING AND 1 PRECEDING
-                   ) AS prior_28d_avg
-            FROM daily_orders
-        )
-        SELECT purchase_date,
-               order_count,
-               ROUND(prior_28d_avg, 2) AS prior_28d_avg,
-               ROUND(100.0 * (order_count - prior_28d_avg)
-                     / NULLIF(prior_28d_avg, 0), 2) AS spike_pct
-        FROM baseline
-        WHERE prior_28d_avg IS NOT NULL
-          AND order_count >= 1.50 * prior_28d_avg
-        ORDER BY spike_pct DESC, purchase_date;
-        """,
-    ),
-    (
-        "Q03: Phan bo review_score va mat can bang lop",
+        "Q01: Phân bố điểm đánh giá và mức mất cân bằng lớp",
         """
         SELECT review_score,
                COUNT(*) AS order_count,
@@ -138,10 +80,10 @@ QUERIES = [
         """,
     ),
     (
-        "Q04: Don giao tre co review thap hon don dung han?",
+        "Q02: Đơn giao trễ so với đúng hạn",
         """
-        SELECT CASE WHEN is_late = 1 THEN 'Giao tre'
-                    ELSE 'Dung han hoac som' END AS delivery_group,
+        SELECT CASE WHEN is_late = 1 THEN 'Giao trễ'
+                    ELSE 'Đúng hạn hoặc sớm' END AS delivery_group,
                COUNT(*) AS order_count,
                ROUND(AVG(review_score), 2) AS avg_review_score,
                ROUND(100.0 * AVG(CASE WHEN review_score >= 4 THEN 1 ELSE 0 END), 2) AS positive_pct,
@@ -152,7 +94,7 @@ QUERIES = [
         """,
     ),
     (
-        "Q05: Muc do tre 1-3 ngay, 4-7 ngay va tren 7 ngay",
+        "Q03: Mức độ trễ theo nhóm ngày",
         """
         SELECT CASE
                    WHEN delay_days <= 0 THEN 'Som hoac dung han'
@@ -174,7 +116,7 @@ QUERIES = [
         """,
     ),
     (
-        "Q06: Phi van chuyen va ty le phi/gia hang anh huong review?",
+        "Q04: Phí ship và tỷ lệ phí trên giá hàng",
         """
         WITH ship_fee_data AS (
             SELECT total_freight AS metric_value, review_score
@@ -198,34 +140,30 @@ QUERIES = [
             FROM ship_fee_ratio_data
         ),
         ship_fee_summary AS (
-            SELECT 'Tong phi ship (BRL)' AS chi_so,
+            SELECT 'Tổng phí ship (BRL)' AS chi_so,
                    CASE quartile_number
-                       WHEN 1 THEN '1 - 25% phi thap nhat'
-                       WHEN 2 THEN '2 - Tu 25%-50%'
-                       WHEN 3 THEN '3 - Tu 50%-75%'
-                       ELSE '4 - 25% phi cao nhat'
-                   END AS nhom_phi,
-                   quartile_number AS nhom_quartile,
+                       WHEN 1 THEN 'Nhóm 1 - 25% phí thấp nhất'
+                       WHEN 2 THEN 'Nhóm 2 - từ 25%-50%'
+                       WHEN 3 THEN 'Nhóm 3 - từ 50%-75%'
+                       ELSE 'Nhóm 4 - 25% phí cao nhất'
+                   END AS nhom_quartile,
                    COUNT(*) AS so_don,
                    ROUND(AVG(metric_value), 2) AS gia_tri_trung_binh,
-                   ROUND(AVG(review_score), 2) AS diem_review_tb,
-                   ROUND(100.0 * AVG(CASE WHEN review_score <= 2 THEN 1 ELSE 0 END), 2) AS ty_le_review_1_2_pct
+                   ROUND(AVG(review_score), 2) AS diem_review_trung_binh
             FROM ship_fee_quartiles
             GROUP BY quartile_number
         ),
         ship_fee_ratio_summary AS (
-            SELECT 'Ty le phi ship/gia hang (%)' AS chi_so,
+            SELECT 'Tỷ lệ phí ship/giá hàng (%)' AS chi_so,
                    CASE quartile_number
-                       WHEN 1 THEN '1 - 25% ty le thap nhat'
-                       WHEN 2 THEN '2 - Tu 25%-50%'
-                       WHEN 3 THEN '3 - Tu 50%-75%'
-                       ELSE '4 - 25% ty le cao nhat'
-                   END AS nhom_phi,
-                   quartile_number AS nhom_quartile,
+                       WHEN 1 THEN 'Nhóm 1 - 25% tỷ lệ thấp nhất'
+                       WHEN 2 THEN 'Nhóm 2 - từ 25%-50%'
+                       WHEN 3 THEN 'Nhóm 3 - từ 50%-75%'
+                       ELSE 'Nhóm 4 - 25% tỷ lệ cao nhất'
+                   END AS nhom_quartile,
                    COUNT(*) AS so_don,
                    ROUND(AVG(metric_value), 2) AS gia_tri_trung_binh,
-                   ROUND(AVG(review_score), 2) AS diem_review_tb,
-                   ROUND(100.0 * AVG(CASE WHEN review_score <= 2 THEN 1 ELSE 0 END), 2) AS ty_le_review_1_2_pct
+                   ROUND(AVG(review_score), 2) AS diem_review_trung_binh
             FROM ship_fee_ratio_quartiles
             GROUP BY quartile_number
         )
@@ -236,7 +174,7 @@ QUERIES = [
         """,
     ),
     (
-        "Q07: Do phuc tap don hang theo mat hang va nguoi ban",
+        "Q05: Độ phức tạp của đơn hàng",
         """
         SELECT CASE
                    WHEN item_count = 1 THEN '1 mat hang'
@@ -254,7 +192,7 @@ QUERIES = [
         """,
     ),
     (
-        "Q08: Phuong thuc thanh toan va so ky tra gop lien quan review?",
+        "Q06: Thanh toán và trả góp",
         """
         SELECT first_payment_type AS payment_type,
                COUNT(*) AS order_count,
@@ -268,7 +206,7 @@ QUERIES = [
         """,
     ),
     (
-        "Q09: Xu huong review_score theo thang",
+        "Q07: Xu hướng review theo tháng",
         """
         SELECT purchase_year_month,
                COUNT(*) AS order_count,
@@ -281,7 +219,7 @@ QUERIES = [
         """,
     ),
     (
-        "Q10: Phan hoa muc do hai long theo bang/khu vuc",
+        "Q08: Hài lòng theo bang/khu vực",
         """
         SELECT customer_state,
                COUNT(*) AS order_count,
@@ -323,11 +261,11 @@ def main():
     initialize_views(conn)
 
     reports = []
-    print("BAT DAU 10 CÂU TRUY VAN SQL Q01-Q10...")
+    print("BẮT ĐẦU 8 CÂU TRUY VẤN SQL Q01-Q08...")
     for title, sql in QUERIES:
         reports.append((title, run_query(conn, title, sql)))
-
-    
+    export_report(reports, REPORT_PATH)
+    print(f"\nDa xuat bao cao: {REPORT_PATH}")
     conn.close()
 
 

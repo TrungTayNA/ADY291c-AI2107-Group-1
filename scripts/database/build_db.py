@@ -16,7 +16,7 @@ import time
 BASE_DIR    = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PROCESSED   = os.path.join(BASE_DIR, "data", "processed")
 SQL_DIR     = os.path.join(BASE_DIR, "sql")
-DB_PATH     = os.path.join(BASE_DIR, "database", "olist.db")
+DB_PATH     = os.path.join(BASE_DIR, "scripts", "database", "olist.db")
 
 CSV_MAP = {
     "stg_customers":          "clean_olist_customers.csv",
@@ -144,25 +144,17 @@ def main():
     log("  BUILD: olist.db - ADY291c-AI2107-Group2")
     log("=" * 60)
 
-<<<<<<< HEAD
     validate_inputs()
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    fd, temp_db_path = tempfile.mkstemp(
-        prefix=".olist-build-", suffix=".db", dir=os.path.dirname(DB_PATH)
+    temp_db = tempfile.NamedTemporaryFile(
+        prefix="olist.",
+        suffix=".tmp.db",
+        dir=os.path.dirname(DB_PATH),
+        delete=False,
     )
-    os.close(fd)
-    os.remove(temp_db_path)
+    temp_db_path = temp_db.name
+    temp_db.close()
     conn = None
-=======
-    if os.path.exists(DB_PATH):
-        os.remove(DB_PATH)
-        log(f"Deleted old DB: {DB_PATH}")
-
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA journal_mode = WAL")
-    conn.execute("PRAGMA synchronous = NORMAL")
->>>>>>> fa95e692592dcfa598d8ed69b0eb58d17bde67ff
 
     try:
         conn = sqlite3.connect(temp_db_path)
@@ -182,6 +174,9 @@ def main():
         conn.close()
         conn = None
 
+        for sidecar in (DB_PATH + "-wal", DB_PATH + "-shm"):
+            if os.path.exists(sidecar):
+                os.remove(sidecar)
         os.replace(temp_db_path, DB_PATH)
         size_mb = os.path.getsize(DB_PATH) / 1024 / 1024
         log(f"\nDONE! File: {DB_PATH}")

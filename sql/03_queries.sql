@@ -204,42 +204,38 @@ ship_fee_ratio_quartiles AS (
 ),
 ship_fee_summary AS (
     SELECT
-        'Tong phi ship (BRL)' AS chi_so,
+        'Tổng phí ship (BRL)' AS chi_so,
         CASE quartile_number
-            WHEN 1 THEN '1 - 25% phi thap nhat'
-            WHEN 2 THEN '2 - Tu 25%-50%'
-            WHEN 3 THEN '3 - Tu 50%-75%'
-            ELSE '4 - 25% phi cao nhat'
-        END AS nhom_phi,
-        quartile_number,
-        COUNT(*) AS order_count,
+            WHEN 1 THEN 'Nhóm 1 - 25% phí thấp nhất'
+            WHEN 2 THEN 'Nhóm 2 - từ 25%-50%'
+            WHEN 3 THEN 'Nhóm 3 - từ 50%-75%'
+            ELSE 'Nhóm 4 - 25% phí cao nhất'
+        END AS nhom_quartile,
+        COUNT(*) AS so_don,
         ROUND(AVG(metric_value), 2) AS gia_tri_trung_binh,
-        ROUND(AVG(review_score), 2) AS review_trung_binh,
-        ROUND(100.0 * AVG(CASE WHEN review_score <= 2 THEN 1 ELSE 0 END), 2) AS ty_le_review_1_2_pct
+        ROUND(AVG(review_score), 2) AS diem_review_trung_binh
     FROM ship_fee_quartiles
     GROUP BY quartile_number
 ),
 ship_fee_ratio_summary AS (
     SELECT
-        'Ty le phi ship/gia hang (%)' AS chi_so,
+        'Tỷ lệ phí ship/giá hàng (%)' AS chi_so,
         CASE quartile_number
-            WHEN 1 THEN '1 - 25% ty le thap nhat'
-            WHEN 2 THEN '2 - Tu 25%-50%'
-            WHEN 3 THEN '3 - Tu 50%-75%'
-            ELSE '4 - 25% ty le cao nhat'
-        END AS nhom_phi,
-        quartile_number,
-        COUNT(*) AS order_count,
+            WHEN 1 THEN 'Nhóm 1 - 25% tỷ lệ thấp nhất'
+            WHEN 2 THEN 'Nhóm 2 - từ 25%-50%'
+            WHEN 3 THEN 'Nhóm 3 - từ 50%-75%'
+            ELSE 'Nhóm 4 - 25% tỷ lệ cao nhất'
+        END AS nhom_quartile,
+        COUNT(*) AS so_don,
         ROUND(AVG(metric_value), 2) AS gia_tri_trung_binh,
-        ROUND(AVG(review_score), 2) AS review_trung_binh,
-        ROUND(100.0 * AVG(CASE WHEN review_score <= 2 THEN 1 ELSE 0 END), 2) AS ty_le_review_1_2_pct
+        ROUND(AVG(review_score), 2) AS diem_review_trung_binh
     FROM ship_fee_ratio_quartiles
     GROUP BY quartile_number
 )
 SELECT * FROM ship_fee_summary
 UNION ALL
 SELECT * FROM ship_fee_ratio_summary
-ORDER BY chi_so DESC, quartile_number;
+ORDER BY chi_so DESC, nhom_quartile;
 
 
 -- ============================================================

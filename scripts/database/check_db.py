@@ -1,6 +1,16 @@
 import sqlite3
+from pathlib import Path
 
-conn = sqlite3.connect('data/olist.db')
+BASE_DIR = Path(__file__).resolve().parents[2]
+DB_PATH = BASE_DIR / "scripts" / "database" / "olist.db"
+
+if not DB_PATH.exists():
+    raise FileNotFoundError(
+        f"Khong tim thay database: {DB_PATH}\n"
+        "Hay chay: python scripts/database/build_db.py"
+    )
+
+conn = sqlite3.connect(DB_PATH)
 
 print('=== TABLES ===')
 tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
@@ -60,4 +70,3 @@ print(df2.to_string(index=False))
 
 conn.close()
 print('\nDone.')
-
