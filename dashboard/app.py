@@ -116,17 +116,18 @@ def load_data():
             n_items=("order_item_id", "count"),
             product_value=("price", "sum"),
             freight_value=("freight_value", "sum"),
-            payment_total=("payment_total", "first"),
-            payment_type=("payment_type", "first"),
-            payment_installments=("payment_installments", "first"),
+            payment_total=("total_payment_value", "first"),
+            payment_type=("main_payment_type", "first"),
+            payment_installments=("max_installments", "first"),
             delivery_days=("delivery_days", "first"),
             estimated_days=("estimated_days", "first"),
             delay_days=("delay_days", "first"),
-            is_late=("is_late", "first"),
+            is_late=("is_delayed", "first"),
             review_score=("review_score", "first"),
             same_state=("same_state", "all"),
         )
     )
+    orders["is_late"] = orders["is_late"].astype(bool)
     return master, orders
 
 
@@ -159,9 +160,9 @@ f_orders = orders[orders["purchase_year"].isin(sel_years)].copy()
 if sel_states:
     f_orders = f_orders[f_orders["customer_state"].isin(sel_states)]
 if late_filter == "Chỉ đơn đúng hạn":
-    f_orders = f_orders[~f_orders["is_late"]]
+    f_orders = f_orders[f_orders["is_late"] == False]
 elif late_filter == "Chỉ đơn giao trễ":
-    f_orders = f_orders[f_orders["is_late"]]
+    f_orders = f_orders[f_orders["is_late"] == True]
 
 f_master = master[master["order_id"].isin(set(f_orders["order_id"]))].copy()
 
