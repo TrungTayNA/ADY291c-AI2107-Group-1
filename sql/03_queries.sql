@@ -299,7 +299,7 @@ SELECT
     ROUND(100.0 * AVG(CASE WHEN review_score >= 4 THEN 1 ELSE 0 END), 2) AS positive_pct,
     ROUND(100.0 * AVG(CASE WHEN review_score <= 2 THEN 1 ELSE 0 END), 2) AS low_score_pct
 FROM v_review_order_features
-WHERE purchase_year_month >= '2017-01'
+
 GROUP BY purchase_year_month
 ORDER BY purchase_year_month;
 
