@@ -264,8 +264,7 @@ def main():
     print("BẮT ĐẦU 8 CÂU TRUY VẤN SQL Q01-Q08...")
     for title, sql in QUERIES:
         reports.append((title, run_query(conn, title, sql)))
-    export_report(reports, REPORT_PATH)
-    print(f"\nDa xuat bao cao: {REPORT_PATH}")
+    
     conn.close()
 
 

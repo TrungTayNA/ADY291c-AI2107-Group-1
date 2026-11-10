@@ -1,6 +1,6 @@
 # Tài liệu Cơ sở dữ liệu (Database Documentation)
 
-Tài liệu mô tả thiết kế SQLite database tại [`data/olist.db`](../data/olist.db) của dự án phân tích thương mại điện tử Olist Brazil (2016–2018).
+Tài liệu mô tả thiết kế SQLite database tại [`ADY291c-AI2107-Group2\scripts\database\olist.db`](../data/olist.db) của dự án phân tích thương mại điện tử Olist Brazil (2016–2018).
 
 ---
 
