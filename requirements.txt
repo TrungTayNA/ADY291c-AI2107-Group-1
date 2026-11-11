@@ -4,6 +4,7 @@ matplotlib
 plotly
 seaborn
 scikit-learn
+joblib
 streamlit
 folium
 ipykernel
