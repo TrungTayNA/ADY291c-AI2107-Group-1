@@ -57,16 +57,5 @@ for label, sql in checks:
     print(f'  {label:45s} {status}')
 
 print()
-print('=== VIEW SAMPLES ===')
-print('v_sales_monthly (top 5):')
-import pandas as pd
-df = pd.read_sql('SELECT * FROM v_sales_monthly ORDER BY purchase_year_month LIMIT 5', conn)
-print(df.to_string(index=False))
-
-print()
-print('v_payment_mix:')
-df2 = pd.read_sql('SELECT * FROM v_payment_mix', conn)
-print(df2.to_string(index=False))
-
 conn.close()
 print('\nDone.')

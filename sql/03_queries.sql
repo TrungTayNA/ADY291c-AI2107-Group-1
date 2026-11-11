@@ -324,29 +324,8 @@ ORDER BY avg_review_score ASC, low_score_pct DESC;
 
 -- ============================================================
 -- LEAKAGE-SAFE MODEL FEATURE VIEWS
--- PRE-DELIVERY: chi dung thong tin biet tai luc dat hang.
 -- POST-DELIVERY: bo sung thong tin chi xuat hien sau khi giao.
 -- ============================================================
-DROP VIEW IF EXISTS v_model_features_at_purchase;
-CREATE VIEW v_model_features_at_purchase AS
-SELECT
-    order_id,
-    review_score AS target_review_score,
-    purchase_hour,
-    purchase_month,
-    customer_state,
-    item_count,
-    distinct_products,
-    seller_count,
-    total_item_price,
-    total_freight,
-    freight_to_price_pct,
-    total_paid,
-    payment_count,
-    max_installments,
-    first_payment_type,
-    voucher_value
-FROM v_review_order_features;
 
 DROP VIEW IF EXISTS v_model_features_post_delivery;
 CREATE VIEW v_model_features_post_delivery AS
