@@ -14,13 +14,13 @@ The project is tested with Python 3.13. Install Python 3.13 with the official Py
 ```powershell
 py install 3.13
 py -3.13 --version
-py -3.13 -m venv .venv
-.\.venv\Scripts\Activate.ps1
+py -3.13 -m venv .venv313
+.\.venv313\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-In VS Code, select the `.venv` interpreter and choose its Python kernel when opening a notebook.
+In VS Code, select the `.venv313` interpreter and choose its Python kernel when opening a notebook.
 
 Run commands from the repository root so the scripts can find the `data` and `sql` directories:
 
@@ -29,7 +29,7 @@ Run commands from the repository root so the scripts can find the `data` and `sq
 streamlit run dashboard\app.py
 
 # Rebuild the SQLite database from cleaned CSV files
-.\.venv\Scripts\python.exe scripts\database\build_db.py
+.\.venv313\Scripts\python.exe scripts\database\build_db.py
 
 # Run the SQL business queries (requires data\olist.db)
 python scripts\database\run_queries.py
@@ -40,31 +40,22 @@ python scripts\database\run_queries.py
 
 ## Present the project with Streamlit
 
-The dashboard is designed to run locally from the repository root:
+To start the dashboard without entering a command, double-click `Chay_dashboard.bat` in the project folder. It opens the dashboard in your browser; keep the command window open while presenting, and close it when finished.
 
-1. Follow the Python setup above once, then open a PowerShell terminal in this project folder.
-2. Activate the environment and start the app:
+For the first run on a new computer, complete the one-time Python setup above. You can also start the app manually from a terminal in the project folder:
 
-   ```powershell
-   .\.venv\Scripts\Activate.ps1
-   python -m streamlit run dashboard\app.py
-   ```
+```powershell
+.\.venv313\Scripts\python.exe -m streamlit run dashboard\app.py
+```
 
-3. Open the local URL printed in the terminal (usually `http://localhost:8501`).
-4. Choose **Chế độ Thuyết trình** to move through the seven project slides, or **Chế độ Dashboard Tương tác** to explore all sections. Use the sidebar to filter by purchase year, customer state, and delivery status. Toggle speaker notes on or off for presentation practice.
-
-The dashboard reads `data\processed\olist_master.csv` locally. The repository also includes the compressed `data\processed\olist_master.csv.gz` copy used by Streamlit Community Cloud. Saved figures in `report\figures` are used when available; otherwise the dashboard builds charts from the filtered data.
-
-The **Dự đoán nguy cơ review thấp** mode provides two Random Forest models: one predicts before delivery, and the other after delivery. Both estimate the risk of a review score of **1–2 stars**; they do not predict an exact 1–5 star score. The serialized models were created with scikit-learn 1.9.1, so that version is pinned in `requirements.txt`.
+The Streamlit app is focused only on predicting review risk. Choose whether to predict before or after delivery, enter the order details, and select **Dự đoán nguy cơ review**. Both Random Forest models estimate the risk of a review score of **1–2 stars**; they do not predict an exact 1–5 star score. The serialized models were created with scikit-learn 1.9.1, so that version is pinned in `requirements.txt`. The dashboard does not need the processed CSV files or SQLite database.
 
 ## Deploy to Streamlit Community Cloud
 
-1. Push the project to a GitHub repository that your account can administer (for example, your own fork). The deployment needs `dashboard/app.py`, `data\processed\olist_master.csv.gz`, and both `.joblib` model files under `Notebooks Project\4_REGRESSION ANALYSIS AND MACHINE LEARNING PREDICTION`.
+1. Push the project to a GitHub repository that your account can administer (for example, your own fork). The deployment needs `dashboard/app.py` and both `.joblib` model files under `Notebooks Project\4_REGRESSION ANALYSIS AND MACHINE LEARNING PREDICTION`.
 2. In Streamlit Community Cloud, create an app from that repository and branch.
 3. Set **Main file path** to `dashboard/app.py` (not `streamlit_app.py`).
 4. In Advanced settings, choose Python 3.13, then deploy. Streamlit installs the dependencies from `requirements.txt`.
-
-The full SQLite database is not required by the deployed dashboard.
 
 ## Team Members
 - Phùng Văn Tráng - HE200218
