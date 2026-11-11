@@ -57,9 +57,6 @@ def export_report(reports, report_path):
         sections.append("\n" + dataframe.to_markdown(index=False) + "\n")
     report_path.write_text("".join(sections), encoding="utf-8")
 
-
-
-
 def initialize_views(conn):
     if not SQL_PATH.exists():
         raise FileNotFoundError(f"Khong tim thay {SQL_PATH}")
