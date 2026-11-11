@@ -1,6 +1,9 @@
 import os
+import joblib
 import numpy as np
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
@@ -12,7 +15,12 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRO_DIR = os.path.join(BASE_DIR, "data", "processed")
-FIG_DIR = os.path.join(BASE_DIR, "reports", "figures")
+FIG_DIR = os.path.join(BASE_DIR, "report", "figures")
+MODEL_DIR = os.path.join(
+    BASE_DIR,
+    "Notebooks Project",
+    "4_REGRESSION ANALYSIS AND MACHINE LEARNING PREDICTION",
+)
 
 st.markdown(
     """
@@ -96,7 +104,17 @@ st.markdown(
 
 @st.cache_data(show_spinner="Đang tải dữ liệu đã làm sạch...")
 def load_data():
-    master_path = os.path.join(PRO_DIR, "olist_master.csv")
+    master_paths = [
+        os.path.join(PRO_DIR, "olist_master.csv"),
+        os.path.join(PRO_DIR, "olist_master.csv.gz"),
+    ]
+    master_path = next((path for path in master_paths if os.path.exists(path)), None)
+    if master_path is None:
+        raise FileNotFoundError(
+            "Không tìm thấy data/processed/olist_master.csv hoặc "
+            "data/processed/olist_master.csv.gz. Hãy chạy notebook tiền xử lý "
+            "hoặc thêm bản dữ liệu nén vào repository để deploy."
+        )
     master = pd.read_csv(
         master_path,
         dtype={"customer_zip_code_prefix": str, "seller_zip_code_prefix": str},
@@ -131,6 +149,22 @@ def load_data():
     return master, orders
 
 
+@st.cache_resource(show_spinner="Đang nạp mô hình dự đoán...")
+def load_review_model(model_filename):
+    model_path = os.path.join(MODEL_DIR, model_filename)
+    if not os.path.isfile(model_path):
+        raise FileNotFoundError(f"Không tìm thấy mô hình dự đoán tại {model_path}.")
+
+    artifact = joblib.load(model_path)
+    if not isinstance(artifact, dict):
+        raise TypeError(f"Mô hình tại {model_path} không có định dạng artifact hợp lệ.")
+    if not all(key in artifact for key in ("model", "threshold", "columns")):
+        raise ValueError(f"Mô hình tại {model_path} thiếu thông tin cần thiết.")
+    if not hasattr(artifact["model"], "predict_proba"):
+        raise TypeError(f"Mô hình tại {model_path} không hỗ trợ dự đoán xác suất.")
+    return artifact
+
+
 master, orders = load_data()
 
 # ======================== SIDEBAR NAVIGATION & FILTERS ========================
@@ -139,7 +173,11 @@ with st.sidebar:
     st.caption("Dự án Khoa học Dữ liệu: Phân tích TMĐT Olist Brazil (2016–2018)")
     mode = st.radio(
         "Chế độ hiển thị",
-        ["🎤 Chế độ Thuyết trình (Từng Slide)", "📊 Chế độ Dashboard Tương tác"],
+        [
+            "🎤 Chế độ Thuyết trình (Từng Slide)",
+            "📊 Chế độ Dashboard Tương tác",
+            "🤖 Dự đoán nguy cơ review thấp",
+        ],
         index=0,
     )
     show_notes = st.toggle("Hiện gợi ý lời thuyết trình (Speaker Notes)", value=True)
@@ -160,11 +198,17 @@ f_orders = orders[orders["purchase_year"].isin(sel_years)].copy()
 if sel_states:
     f_orders = f_orders[f_orders["customer_state"].isin(sel_states)]
 if late_filter == "Chỉ đơn đúng hạn":
-    f_orders = f_orders[f_orders["is_late"] == False]
+    f_orders = f_orders[~f_orders["is_late"]]
 elif late_filter == "Chỉ đơn giao trễ":
-    f_orders = f_orders[f_orders["is_late"] == True]
+    f_orders = f_orders[f_orders["is_late"]]
 
 f_master = master[master["order_id"].isin(set(f_orders["order_id"]))].copy()
+filters_are_unfiltered = (
+    set(sel_years) == set(years) and not sel_states and late_filter == "Tất cả đơn"
+)
+
+if not sel_years:
+    st.warning("Hãy chọn ít nhất một năm ở bộ lọc bên trái để xem dữ liệu.")
 
 # ======================== HEADER & KPI BAR ========================
 st.markdown(
@@ -221,11 +265,106 @@ def speaker_box(text: str):
 
 
 def show_saved_or_plot(fig_filename: str, caption: str):
-    path = os.path.join(FIG_DIR, fig_filename)
-    if os.path.exists(path):
+    saved_figures = {
+        "06_late_vs_review.png": "04_02_late_vs_review_score.png",
+        "09_correlation.png": "04_04_spearman_correlation_matrix.png",
+    }
+    path = os.path.join(FIG_DIR, saved_figures.get(fig_filename, fig_filename))
+    if os.path.exists(path) and filters_are_unfiltered:
         st.image(path, caption=caption, width="stretch")
+        return
+
+    fig = None
+    if fig_filename == "01_monthly_revenue.png" and not f_orders.empty:
+        monthly = (
+            f_orders.assign(month=f_orders["purchase_ts"].dt.to_period("M").astype(str))
+            .groupby("month", as_index=False)
+            .agg(revenue=("product_value", "sum"), orders=("order_id", "count"))
+        )
+        fig = px.line(monthly, x="month", y="revenue", markers=True, title="Doanh thu theo tháng")
+        fig.update_layout(xaxis_title="Tháng", yaxis_title="Doanh thu (BRL)")
+    elif fig_filename == "02_weekday_hour_heatmap.png" and not f_orders.empty:
+        heatmap = f_orders.pivot_table(
+            index="weekday", columns="hour", values="order_id", aggfunc="count", fill_value=0
+        ).reindex(index=range(7), columns=range(24), fill_value=0)
+        fig = go.Figure(
+            go.Heatmap(
+                z=heatmap.values,
+                x=[f"{hour:02d}:00" for hour in heatmap.columns],
+                y=["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"],
+                colorscale="Blues",
+            )
+        )
+        fig.update_layout(title="Số đơn theo thứ và giờ mua", xaxis_title="Giờ", yaxis_title="Ngày")
+    elif fig_filename == "03_category_pareto.png" and not f_master.empty:
+        categories = (
+            f_master.groupby("product_category_name_english", as_index=False)["price"]
+            .sum()
+            .nlargest(15, "price")
+            .sort_values("price")
+        )
+        fig = px.bar(
+            categories,
+            x="price",
+            y="product_category_name_english",
+            orientation="h",
+            title="15 danh mục có doanh thu sản phẩm cao nhất",
+        )
+        fig.update_layout(xaxis_title="Doanh thu (BRL)", yaxis_title="Danh mục")
+    elif fig_filename == "08_payment.png" and not f_orders.empty:
+        payment = f_orders["payment_type"].value_counts().rename_axis("Phương thức").reset_index(name="Số đơn")
+        fig = px.pie(payment, names="Phương thức", values="Số đơn", title="Cơ cấu phương thức thanh toán")
+    elif fig_filename in {"04_state_orders_delivery.png", "05_delivery_map.png"} and not f_orders.empty:
+        by_state = (
+            f_orders.groupby("customer_state", as_index=False)
+            .agg(orders=("order_id", "count"), delivery_days=("delivery_days", "mean"))
+            .nlargest(15, "orders")
+            .sort_values("orders")
+        )
+        fig = px.bar(
+            by_state,
+            x="orders",
+            y="customer_state",
+            orientation="h",
+            color="delivery_days",
+            color_continuous_scale="RdYlGn_r",
+            title="Số đơn và thời gian giao trung bình theo bang (top 15)",
+        )
+        fig.update_layout(xaxis_title="Số đơn", yaxis_title="Bang khách hàng")
+    elif fig_filename == "07_delivery_days_hist.png" and not f_orders.empty:
+        delivery = f_orders[["delivery_days", "estimated_days"]].melt(
+            var_name="Loại thời gian", value_name="Số ngày"
+        )
+        fig = px.histogram(
+            delivery,
+            x="Số ngày",
+            color="Loại thời gian",
+            barmode="overlay",
+            opacity=0.65,
+            title="Phân phối thời gian giao thực tế và dự kiến",
+        )
+    elif fig_filename == "06_late_vs_review.png" and not f_orders.empty:
+        reviewed = f_orders.dropna(subset=["review_score"]).copy()
+        reviewed["Giao hàng"] = np.where(reviewed["is_late"], "Giao trễ", "Đúng hạn")
+        fig = px.histogram(
+            reviewed,
+            x="review_score",
+            color="Giao hàng",
+            barmode="group",
+            title="Điểm đánh giá theo tình trạng giao hàng",
+        )
+        fig.update_layout(xaxis_title="Điểm đánh giá", yaxis_title="Số đơn")
+    elif fig_filename == "09_correlation.png" and not f_orders.empty:
+        numeric = f_orders[
+            ["product_value", "freight_value", "delivery_days", "delay_days", "review_score", "n_items"]
+        ].corr(method="spearman")
+        fig = px.imshow(numeric, text_auto=".2f", color_continuous_scale="RdBu_r", zmin=-1, zmax=1)
+        fig.update_layout(title="Tương quan Spearman giữa các chỉ số")
+
+    if fig is None:
+        st.info(f"Không có biểu đồ phù hợp cho bộ lọc hiện tại: {caption}")
     else:
-        st.warning(f"Không tìm thấy {fig_filename}")
+        st.plotly_chart(fig, width="stretch", key=fig_filename)
 
 
 # ======================== SLIDE RENDERERS ========================
@@ -503,6 +642,147 @@ def slide_07_retention_and_recommendations():
     )
 
 
+def render_review_prediction():
+    st.subheader("🤖 Dự đoán nguy cơ đánh giá thấp")
+    st.markdown(
+        "Mô hình phân loại **nguy cơ review 1–2 sao** (so với review từ 3 sao trở lên). "
+        "Đây là xác suất/rủi ro, **không phải dự đoán chính xác số sao 1–5**."
+    )
+    prediction_timing = st.radio(
+        "Thời điểm dự đoán",
+        ["Trước khi giao hàng", "Sau khi giao hàng"],
+        horizontal=True,
+    )
+    if prediction_timing == "Trước khi giao hàng":
+        model_filename = "review_model_at_purchase.joblib"
+    else:
+        model_filename = "review_model_post_delivery.joblib"
+    artifact = load_review_model(model_filename)
+
+    if not all_states:
+        st.error("Không có danh sách bang khách hàng để tạo dự đoán.")
+        return
+
+    st.caption(
+        f"Mô hình Random Forest · Ngưỡng phân loại "
+        f"{float(artifact['threshold']):.2f} · Nguồn: dự án Olist"
+    )
+    state_default = all_states.index("SP") if "SP" in all_states else 0
+    with st.form("review_risk_prediction_form"):
+        details, value = st.columns(2)
+        with details:
+            purchase_hour = st.slider("Giờ đặt hàng", min_value=0, max_value=23, value=12)
+            purchase_month = st.slider("Tháng đặt hàng", min_value=1, max_value=12, value=6)
+            customer_state = st.selectbox("Bang khách hàng", all_states, index=state_default)
+            item_count = st.number_input("Số sản phẩm trong đơn", min_value=1, max_value=100, value=1)
+            distinct_products = st.number_input(
+                "Số loại sản phẩm khác nhau", min_value=1, max_value=100, value=1
+            )
+            seller_count = st.number_input("Số người bán", min_value=1, max_value=100, value=1)
+        with value:
+            total_item_price = st.number_input(
+                "Tổng tiền sản phẩm (BRL)", min_value=0.0, value=100.0, step=10.0
+            )
+            total_freight = st.number_input(
+                "Tổng phí vận chuyển (BRL)", min_value=0.0, value=20.0, step=1.0
+            )
+            total_paid = st.number_input(
+                "Tổng thanh toán (BRL)", min_value=0.0, value=120.0, step=10.0
+            )
+            max_installments = st.number_input(
+                "Số kỳ thanh toán tối đa", min_value=0, max_value=36, value=1
+            )
+            prediction_features = {}
+            if prediction_timing == "Sau khi giao hàng":
+                delivery_days = st.number_input(
+                    "Số ngày giao thực tế", min_value=0.0, value=15.0, step=1.0
+                )
+                estimated_days = st.number_input(
+                    "Số ngày giao dự kiến", min_value=0.0, value=12.0, step=1.0
+                )
+                delay_days = st.number_input(
+                    "Số ngày chênh lệch so với ngày hẹn",
+                    min_value=-365,
+                    max_value=365,
+                    value=0,
+                    help=(
+                        "Nhập riêng theo độ lệch giữa hai ngày giao thực tế và dự kiến: "
+                        "số âm là sớm, số dương là trễ."
+                    ),
+                )
+                is_late = int(
+                    st.checkbox(
+                        "Đơn được giao sau ngày dự kiến",
+                        help="Đối chiếu ngày giao thực tế với ngày giao dự kiến.",
+                    )
+                )
+
+        submitted = st.form_submit_button("Dự đoán nguy cơ review")
+
+    if not submitted:
+        return
+
+    freight_to_price_pct = (
+        round(100.0 * total_freight / total_item_price, 2) if total_item_price > 0 else 0.0
+    )
+    prediction_features.update(
+        {
+            "purchase_hour": purchase_hour,
+            "purchase_month": purchase_month,
+            "customer_state": customer_state,
+            "item_count": item_count,
+            "distinct_products": distinct_products,
+            "seller_count": seller_count,
+            "total_item_price": total_item_price,
+            "total_freight": total_freight,
+            "freight_to_price_pct": freight_to_price_pct,
+            "total_paid": total_paid,
+            "max_installments": max_installments,
+        }
+    )
+    if prediction_timing == "Sau khi giao hàng":
+        prediction_features.update(
+            {
+                "delivery_days": delivery_days,
+                "estimated_days": estimated_days,
+                "delay_days": delay_days,
+                "is_late": is_late,
+            }
+        )
+
+    model = artifact["model"]
+    model_columns = artifact["columns"]
+    missing_features = [name for name in model_columns if name not in prediction_features]
+    if missing_features:
+        raise ValueError(f"Thiếu đặc trưng đầu vào của mô hình: {', '.join(missing_features)}.")
+    input_row = pd.DataFrame(
+        [[prediction_features[name] for name in model_columns]],
+        columns=model_columns,
+    )
+    classes = list(model.classes_)
+    if 1 not in classes:
+        raise ValueError("Mô hình không có lớp mục tiêu nguy cơ review thấp (1).")
+    risk_probability = float(model.predict_proba(input_row)[0, classes.index(1)])
+    threshold = float(artifact["threshold"])
+    is_high_risk = risk_probability >= threshold
+
+    probability_col, result_col = st.columns(2)
+    probability_col.metric("Xác suất review 1–2 sao", f"{risk_probability:.1%}")
+    result_col.metric(
+        "Phân loại của mô hình",
+        "Nguy cơ cao" if is_high_risk else "Nguy cơ thấp",
+        f"Ngưỡng: {threshold:.2f}",
+    )
+    st.progress(risk_probability)
+    if is_high_risk:
+        st.warning(
+            "Đơn hàng có nguy cơ nhận đánh giá thấp theo ngưỡng của mô hình. "
+            "Nên ưu tiên theo dõi trải nghiệm giao hàng và hỗ trợ khách hàng."
+        )
+    else:
+        st.success("Mô hình chưa xếp đơn hàng vào nhóm nguy cơ review thấp.")
+
+
 # ======================== RENDER BY MODE ========================
 SLIDES = [
     ("Slide 1 · Tổng quan & EDA (Notebook 01)", slide_01_overview),
@@ -542,8 +822,10 @@ if mode.startswith("🎤"):
 
     st.progress((st.session_state.slide_idx + 1) / len(SLIDES))
     SLIDES[st.session_state.slide_idx][1]()
-else:
+elif mode.startswith("📊"):
     tabs = st.tabs([s[0].split("·")[1].strip() for s in SLIDES])
     for tab, (_, render_fn) in zip(tabs, SLIDES):
         with tab:
             render_fn()
+else:
+    render_review_prediction()
