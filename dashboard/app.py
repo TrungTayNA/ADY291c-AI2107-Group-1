@@ -1,6 +1,8 @@
 import os
 import numpy as np
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
@@ -12,7 +14,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRO_DIR = os.path.join(BASE_DIR, "data", "processed")
-FIG_DIR = os.path.join(BASE_DIR, "reports", "figures")
+FIG_DIR = os.path.join(BASE_DIR, "report", "figures")
 
 st.markdown(
     """
@@ -97,6 +99,11 @@ st.markdown(
 @st.cache_data(show_spinner="Đang tải dữ liệu đã làm sạch...")
 def load_data():
     master_path = os.path.join(PRO_DIR, "olist_master.csv")
+    if not os.path.exists(master_path):
+        raise FileNotFoundError(
+            f"Không tìm thấy dữ liệu tại {master_path}. "
+            "Hãy chạy notebook tiền xử lý để tạo data/processed/olist_master.csv."
+        )
     master = pd.read_csv(
         master_path,
         dtype={"customer_zip_code_prefix": str, "seller_zip_code_prefix": str},
@@ -160,11 +167,17 @@ f_orders = orders[orders["purchase_year"].isin(sel_years)].copy()
 if sel_states:
     f_orders = f_orders[f_orders["customer_state"].isin(sel_states)]
 if late_filter == "Chỉ đơn đúng hạn":
-    f_orders = f_orders[f_orders["is_late"] == False]
+    f_orders = f_orders[~f_orders["is_late"]]
 elif late_filter == "Chỉ đơn giao trễ":
-    f_orders = f_orders[f_orders["is_late"] == True]
+    f_orders = f_orders[f_orders["is_late"]]
 
 f_master = master[master["order_id"].isin(set(f_orders["order_id"]))].copy()
+filters_are_unfiltered = (
+    set(sel_years) == set(years) and not sel_states and late_filter == "Tất cả đơn"
+)
+
+if not sel_years:
+    st.warning("Hãy chọn ít nhất một năm ở bộ lọc bên trái để xem dữ liệu.")
 
 # ======================== HEADER & KPI BAR ========================
 st.markdown(
@@ -221,11 +234,106 @@ def speaker_box(text: str):
 
 
 def show_saved_or_plot(fig_filename: str, caption: str):
-    path = os.path.join(FIG_DIR, fig_filename)
-    if os.path.exists(path):
+    saved_figures = {
+        "06_late_vs_review.png": "04_02_late_vs_review_score.png",
+        "09_correlation.png": "04_04_spearman_correlation_matrix.png",
+    }
+    path = os.path.join(FIG_DIR, saved_figures.get(fig_filename, fig_filename))
+    if os.path.exists(path) and filters_are_unfiltered:
         st.image(path, caption=caption, width="stretch")
+        return
+
+    fig = None
+    if fig_filename == "01_monthly_revenue.png" and not f_orders.empty:
+        monthly = (
+            f_orders.assign(month=f_orders["purchase_ts"].dt.to_period("M").astype(str))
+            .groupby("month", as_index=False)
+            .agg(revenue=("product_value", "sum"), orders=("order_id", "count"))
+        )
+        fig = px.line(monthly, x="month", y="revenue", markers=True, title="Doanh thu theo tháng")
+        fig.update_layout(xaxis_title="Tháng", yaxis_title="Doanh thu (BRL)")
+    elif fig_filename == "02_weekday_hour_heatmap.png" and not f_orders.empty:
+        heatmap = f_orders.pivot_table(
+            index="weekday", columns="hour", values="order_id", aggfunc="count", fill_value=0
+        ).reindex(index=range(7), columns=range(24), fill_value=0)
+        fig = go.Figure(
+            go.Heatmap(
+                z=heatmap.values,
+                x=[f"{hour:02d}:00" for hour in heatmap.columns],
+                y=["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"],
+                colorscale="Blues",
+            )
+        )
+        fig.update_layout(title="Số đơn theo thứ và giờ mua", xaxis_title="Giờ", yaxis_title="Ngày")
+    elif fig_filename == "03_category_pareto.png" and not f_master.empty:
+        categories = (
+            f_master.groupby("product_category_name_english", as_index=False)["price"]
+            .sum()
+            .nlargest(15, "price")
+            .sort_values("price")
+        )
+        fig = px.bar(
+            categories,
+            x="price",
+            y="product_category_name_english",
+            orientation="h",
+            title="15 danh mục có doanh thu sản phẩm cao nhất",
+        )
+        fig.update_layout(xaxis_title="Doanh thu (BRL)", yaxis_title="Danh mục")
+    elif fig_filename == "08_payment.png" and not f_orders.empty:
+        payment = f_orders["payment_type"].value_counts().rename_axis("Phương thức").reset_index(name="Số đơn")
+        fig = px.pie(payment, names="Phương thức", values="Số đơn", title="Cơ cấu phương thức thanh toán")
+    elif fig_filename in {"04_state_orders_delivery.png", "05_delivery_map.png"} and not f_orders.empty:
+        by_state = (
+            f_orders.groupby("customer_state", as_index=False)
+            .agg(orders=("order_id", "count"), delivery_days=("delivery_days", "mean"))
+            .nlargest(15, "orders")
+            .sort_values("orders")
+        )
+        fig = px.bar(
+            by_state,
+            x="orders",
+            y="customer_state",
+            orientation="h",
+            color="delivery_days",
+            color_continuous_scale="RdYlGn_r",
+            title="Số đơn và thời gian giao trung bình theo bang (top 15)",
+        )
+        fig.update_layout(xaxis_title="Số đơn", yaxis_title="Bang khách hàng")
+    elif fig_filename == "07_delivery_days_hist.png" and not f_orders.empty:
+        delivery = f_orders[["delivery_days", "estimated_days"]].melt(
+            var_name="Loại thời gian", value_name="Số ngày"
+        )
+        fig = px.histogram(
+            delivery,
+            x="Số ngày",
+            color="Loại thời gian",
+            barmode="overlay",
+            opacity=0.65,
+            title="Phân phối thời gian giao thực tế và dự kiến",
+        )
+    elif fig_filename == "06_late_vs_review.png" and not f_orders.empty:
+        reviewed = f_orders.dropna(subset=["review_score"]).copy()
+        reviewed["Giao hàng"] = np.where(reviewed["is_late"], "Giao trễ", "Đúng hạn")
+        fig = px.histogram(
+            reviewed,
+            x="review_score",
+            color="Giao hàng",
+            barmode="group",
+            title="Điểm đánh giá theo tình trạng giao hàng",
+        )
+        fig.update_layout(xaxis_title="Điểm đánh giá", yaxis_title="Số đơn")
+    elif fig_filename == "09_correlation.png" and not f_orders.empty:
+        numeric = f_orders[
+            ["product_value", "freight_value", "delivery_days", "delay_days", "review_score", "n_items"]
+        ].corr(method="spearman")
+        fig = px.imshow(numeric, text_auto=".2f", color_continuous_scale="RdBu_r", zmin=-1, zmax=1)
+        fig.update_layout(title="Tương quan Spearman giữa các chỉ số")
+
+    if fig is None:
+        st.info(f"Không có biểu đồ phù hợp cho bộ lọc hiện tại: {caption}")
     else:
-        st.warning(f"Không tìm thấy {fig_filename}")
+        st.plotly_chart(fig, width="stretch", key=fig_filename)
 
 
 # ======================== SLIDE RENDERERS ========================
