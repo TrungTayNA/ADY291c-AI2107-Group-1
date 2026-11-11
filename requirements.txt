@@ -3,7 +3,8 @@ numpy
 matplotlib
 plotly
 seaborn
-scikit-learn
+scikit-learn==1.9.1
+joblib
 streamlit
 folium
 ipykernel

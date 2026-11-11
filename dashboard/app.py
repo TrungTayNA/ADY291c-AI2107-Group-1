@@ -1,4 +1,5 @@
 import os
+import joblib
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -15,6 +16,11 @@ st.set_page_config(
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRO_DIR = os.path.join(BASE_DIR, "data", "processed")
 FIG_DIR = os.path.join(BASE_DIR, "report", "figures")
+MODEL_DIR = os.path.join(
+    BASE_DIR,
+    "Notebooks Project",
+    "4_REGRESSION ANALYSIS AND MACHINE LEARNING PREDICTION",
+)
 
 st.markdown(
     """
@@ -98,11 +104,16 @@ st.markdown(
 
 @st.cache_data(show_spinner="Đang tải dữ liệu đã làm sạch...")
 def load_data():
-    master_path = os.path.join(PRO_DIR, "olist_master.csv")
-    if not os.path.exists(master_path):
+    master_paths = [
+        os.path.join(PRO_DIR, "olist_master.csv"),
+        os.path.join(PRO_DIR, "olist_master.csv.gz"),
+    ]
+    master_path = next((path for path in master_paths if os.path.exists(path)), None)
+    if master_path is None:
         raise FileNotFoundError(
-            f"Không tìm thấy dữ liệu tại {master_path}. "
-            "Hãy chạy notebook tiền xử lý để tạo data/processed/olist_master.csv."
+            "Không tìm thấy data/processed/olist_master.csv hoặc "
+            "data/processed/olist_master.csv.gz. Hãy chạy notebook tiền xử lý "
+            "hoặc thêm bản dữ liệu nén vào repository để deploy."
         )
     master = pd.read_csv(
         master_path,
@@ -138,6 +149,22 @@ def load_data():
     return master, orders
 
 
+@st.cache_resource(show_spinner="Đang nạp mô hình dự đoán...")
+def load_review_model(model_filename):
+    model_path = os.path.join(MODEL_DIR, model_filename)
+    if not os.path.isfile(model_path):
+        raise FileNotFoundError(f"Không tìm thấy mô hình dự đoán tại {model_path}.")
+
+    artifact = joblib.load(model_path)
+    if not isinstance(artifact, dict):
+        raise TypeError(f"Mô hình tại {model_path} không có định dạng artifact hợp lệ.")
+    if not all(key in artifact for key in ("model", "threshold", "columns")):
+        raise ValueError(f"Mô hình tại {model_path} thiếu thông tin cần thiết.")
+    if not hasattr(artifact["model"], "predict_proba"):
+        raise TypeError(f"Mô hình tại {model_path} không hỗ trợ dự đoán xác suất.")
+    return artifact
+
+
 master, orders = load_data()
 
 # ======================== SIDEBAR NAVIGATION & FILTERS ========================
@@ -146,7 +173,11 @@ with st.sidebar:
     st.caption("Dự án Khoa học Dữ liệu: Phân tích TMĐT Olist Brazil (2016–2018)")
     mode = st.radio(
         "Chế độ hiển thị",
-        ["🎤 Chế độ Thuyết trình (Từng Slide)", "📊 Chế độ Dashboard Tương tác"],
+        [
+            "🎤 Chế độ Thuyết trình (Từng Slide)",
+            "📊 Chế độ Dashboard Tương tác",
+            "🤖 Dự đoán nguy cơ review thấp",
+        ],
         index=0,
     )
     show_notes = st.toggle("Hiện gợi ý lời thuyết trình (Speaker Notes)", value=True)
@@ -611,6 +642,147 @@ def slide_07_retention_and_recommendations():
     )
 
 
+def render_review_prediction():
+    st.subheader("🤖 Dự đoán nguy cơ đánh giá thấp")
+    st.markdown(
+        "Mô hình phân loại **nguy cơ review 1–2 sao** (so với review từ 3 sao trở lên). "
+        "Đây là xác suất/rủi ro, **không phải dự đoán chính xác số sao 1–5**."
+    )
+    prediction_timing = st.radio(
+        "Thời điểm dự đoán",
+        ["Trước khi giao hàng", "Sau khi giao hàng"],
+        horizontal=True,
+    )
+    if prediction_timing == "Trước khi giao hàng":
+        model_filename = "review_model_at_purchase.joblib"
+    else:
+        model_filename = "review_model_post_delivery.joblib"
+    artifact = load_review_model(model_filename)
+
+    if not all_states:
+        st.error("Không có danh sách bang khách hàng để tạo dự đoán.")
+        return
+
+    st.caption(
+        f"Mô hình Random Forest · Ngưỡng phân loại "
+        f"{float(artifact['threshold']):.2f} · Nguồn: dự án Olist"
+    )
+    state_default = all_states.index("SP") if "SP" in all_states else 0
+    with st.form("review_risk_prediction_form"):
+        details, value = st.columns(2)
+        with details:
+            purchase_hour = st.slider("Giờ đặt hàng", min_value=0, max_value=23, value=12)
+            purchase_month = st.slider("Tháng đặt hàng", min_value=1, max_value=12, value=6)
+            customer_state = st.selectbox("Bang khách hàng", all_states, index=state_default)
+            item_count = st.number_input("Số sản phẩm trong đơn", min_value=1, max_value=100, value=1)
+            distinct_products = st.number_input(
+                "Số loại sản phẩm khác nhau", min_value=1, max_value=100, value=1
+            )
+            seller_count = st.number_input("Số người bán", min_value=1, max_value=100, value=1)
+        with value:
+            total_item_price = st.number_input(
+                "Tổng tiền sản phẩm (BRL)", min_value=0.0, value=100.0, step=10.0
+            )
+            total_freight = st.number_input(
+                "Tổng phí vận chuyển (BRL)", min_value=0.0, value=20.0, step=1.0
+            )
+            total_paid = st.number_input(
+                "Tổng thanh toán (BRL)", min_value=0.0, value=120.0, step=10.0
+            )
+            max_installments = st.number_input(
+                "Số kỳ thanh toán tối đa", min_value=0, max_value=36, value=1
+            )
+            prediction_features = {}
+            if prediction_timing == "Sau khi giao hàng":
+                delivery_days = st.number_input(
+                    "Số ngày giao thực tế", min_value=0.0, value=15.0, step=1.0
+                )
+                estimated_days = st.number_input(
+                    "Số ngày giao dự kiến", min_value=0.0, value=12.0, step=1.0
+                )
+                delay_days = st.number_input(
+                    "Số ngày chênh lệch so với ngày hẹn",
+                    min_value=-365,
+                    max_value=365,
+                    value=0,
+                    help=(
+                        "Nhập riêng theo độ lệch giữa hai ngày giao thực tế và dự kiến: "
+                        "số âm là sớm, số dương là trễ."
+                    ),
+                )
+                is_late = int(
+                    st.checkbox(
+                        "Đơn được giao sau ngày dự kiến",
+                        help="Đối chiếu ngày giao thực tế với ngày giao dự kiến.",
+                    )
+                )
+
+        submitted = st.form_submit_button("Dự đoán nguy cơ review")
+
+    if not submitted:
+        return
+
+    freight_to_price_pct = (
+        round(100.0 * total_freight / total_item_price, 2) if total_item_price > 0 else 0.0
+    )
+    prediction_features.update(
+        {
+            "purchase_hour": purchase_hour,
+            "purchase_month": purchase_month,
+            "customer_state": customer_state,
+            "item_count": item_count,
+            "distinct_products": distinct_products,
+            "seller_count": seller_count,
+            "total_item_price": total_item_price,
+            "total_freight": total_freight,
+            "freight_to_price_pct": freight_to_price_pct,
+            "total_paid": total_paid,
+            "max_installments": max_installments,
+        }
+    )
+    if prediction_timing == "Sau khi giao hàng":
+        prediction_features.update(
+            {
+                "delivery_days": delivery_days,
+                "estimated_days": estimated_days,
+                "delay_days": delay_days,
+                "is_late": is_late,
+            }
+        )
+
+    model = artifact["model"]
+    model_columns = artifact["columns"]
+    missing_features = [name for name in model_columns if name not in prediction_features]
+    if missing_features:
+        raise ValueError(f"Thiếu đặc trưng đầu vào của mô hình: {', '.join(missing_features)}.")
+    input_row = pd.DataFrame(
+        [[prediction_features[name] for name in model_columns]],
+        columns=model_columns,
+    )
+    classes = list(model.classes_)
+    if 1 not in classes:
+        raise ValueError("Mô hình không có lớp mục tiêu nguy cơ review thấp (1).")
+    risk_probability = float(model.predict_proba(input_row)[0, classes.index(1)])
+    threshold = float(artifact["threshold"])
+    is_high_risk = risk_probability >= threshold
+
+    probability_col, result_col = st.columns(2)
+    probability_col.metric("Xác suất review 1–2 sao", f"{risk_probability:.1%}")
+    result_col.metric(
+        "Phân loại của mô hình",
+        "Nguy cơ cao" if is_high_risk else "Nguy cơ thấp",
+        f"Ngưỡng: {threshold:.2f}",
+    )
+    st.progress(risk_probability)
+    if is_high_risk:
+        st.warning(
+            "Đơn hàng có nguy cơ nhận đánh giá thấp theo ngưỡng của mô hình. "
+            "Nên ưu tiên theo dõi trải nghiệm giao hàng và hỗ trợ khách hàng."
+        )
+    else:
+        st.success("Mô hình chưa xếp đơn hàng vào nhóm nguy cơ review thấp.")
+
+
 # ======================== RENDER BY MODE ========================
 SLIDES = [
     ("Slide 1 · Tổng quan & EDA (Notebook 01)", slide_01_overview),
@@ -650,8 +822,10 @@ if mode.startswith("🎤"):
 
     st.progress((st.session_state.slide_idx + 1) / len(SLIDES))
     SLIDES[st.session_state.slide_idx][1]()
-else:
+elif mode.startswith("📊"):
     tabs = st.tabs([s[0].split("·")[1].strip() for s in SLIDES])
     for tab, (_, render_fn) in zip(tabs, SLIDES):
         with tab:
             render_fn()
+else:
+    render_review_prediction()
