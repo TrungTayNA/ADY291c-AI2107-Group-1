@@ -132,8 +132,7 @@ def verify(conn):
     log(f"\n  TOTAL: {total:,} ban ghi trong relational tables")
 
     # Kiem tra view
-    for v in ["v_review_order_features", 
-              "v_model_features_post_delivery"]:
+    for v in ["v_review_order_features"]:
         n = conn.execute(f"SELECT COUNT(*) FROM {v}").fetchone()[0]
         log(f"  [view] {v:30s} {n:>7,} rows")
 

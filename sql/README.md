@@ -91,10 +91,8 @@ Lưu ý: schema cho phép một `customer_id` có nhiều đơn, nhưng trong da
 | `delay_days` | INT | | Số ngày trễ (âm = sớm hơn dự kiến) |
 | `is_late` | INT | | 1 = trễ, 0 = đúng/sớm hạn |
 | `purchase_year` | INT | | Năm mua (feature đã tính sẵn) |
-| `purchase_month` | INT | | Tháng mua |
 | `purchase_year_month` | TEXT | | "YYYY-MM" (dùng GROUP BY) |
 | `purchase_weekday` | INT | | 0=Thứ 2 … 6=CN |
-| `purchase_hour` | INT | | Giờ đặt hàng (0–23) |
 
 ### Bảng 3: `order_items`
 | Cột | Kiểu | Khóa | Mô tả |
@@ -297,5 +295,5 @@ Lệnh cuối tạo mới các view được định nghĩa trong file rồi in 
 
 ```sql
 SELECT * FROM v_review_order_features LIMIT 10;
-SELECT * FROM v_model_features_post_delivery LIMIT 10;
+
 ```

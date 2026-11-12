@@ -86,8 +86,7 @@ INSERT OR IGNORE INTO orders (
     order_delivered_carrier_date, order_delivered_customer_date,
     order_estimated_delivery_date,
     delivery_days, estimated_days, delay_days,
-    is_late, purchase_year, purchase_month,
-    purchase_year_month, purchase_weekday, purchase_hour
+    is_late, purchase_year, purchase_year_month, purchase_weekday
 )
 SELECT
     order_id, customer_id, order_status,
@@ -96,8 +95,7 @@ SELECT
     order_estimated_delivery_date,
     delivery_days, estimated_days, delay_days,
     CASE WHEN is_late = 'True' OR is_late = 1 THEN 1 ELSE 0 END,
-    purchase_year, purchase_month,
-    purchase_year_month, purchase_weekday, purchase_hour
+    purchase_year, purchase_year_month, purchase_weekday
 FROM stg_orders
 WHERE order_id IS NOT NULL
   AND customer_id IN (SELECT customer_id FROM customers);

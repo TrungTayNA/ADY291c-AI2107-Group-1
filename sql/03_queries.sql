@@ -30,7 +30,6 @@ items_by_order AS (
     SELECT
         order_id,
         COUNT(*) AS item_count,
-        COUNT(DISTINCT product_id) AS distinct_products,
         COUNT(DISTINCT seller_id) AS seller_count,
         SUM(price) AS total_item_price,
         SUM(freight_value) AS total_freight
@@ -40,37 +39,20 @@ items_by_order AS (
 payments_by_order AS (
     SELECT
         order_id,
-        SUM(payment_value) AS total_paid,
-        COUNT(*) AS payment_count,
         MAX(payment_installments) AS max_installments,
-        MAX(CASE WHEN payment_sequential = 1 THEN payment_type END) AS first_payment_type,
-        SUM(CASE WHEN payment_type = 'voucher' THEN payment_value ELSE 0 END) AS voucher_value
+        MAX(CASE WHEN payment_sequential = 1 THEN payment_type END) AS first_payment_type
     FROM order_payments
     GROUP BY order_id
-),
-seller_states_by_order AS (
-    SELECT
-        oi.order_id,
-        SUM(CASE WHEN s.seller_state = c.customer_state THEN 1 ELSE 0 END) AS same_state_item_count,
-        COUNT(*) AS seller_item_count
-    FROM order_items oi
-    JOIN orders o ON o.order_id = oi.order_id
-    JOIN customers c ON c.customer_id = o.customer_id
-    JOIN sellers s ON s.seller_id = oi.seller_id
-    GROUP BY oi.order_id
 )
 SELECT
     o.order_id,
     c.customer_state,
     o.purchase_year_month,
-    o.purchase_month,
-    o.purchase_hour,
     o.delivery_days,
     o.estimated_days,
     o.delay_days,
     o.is_late,
     i.item_count,
-    i.distinct_products,
     i.seller_count,
     i.total_item_price,
     i.total_freight,
@@ -79,16 +61,8 @@ SELECT
         THEN ROUND(100.0 * i.total_freight / i.total_item_price, 2)
         ELSE NULL
     END AS freight_to_price_pct,
-    CASE
-        WHEN ss.seller_item_count > 0
-        THEN ROUND(100.0 * ss.same_state_item_count / ss.seller_item_count, 2)
-        ELSE 0
-    END AS same_state_item_pct,
-    p.total_paid,
-    p.payment_count,
     p.max_installments,
     p.first_payment_type,
-    p.voucher_value,
     r.review_score
 FROM orders o
 JOIN ranked_reviews r
@@ -96,7 +70,6 @@ JOIN ranked_reviews r
 JOIN customers c ON c.customer_id = o.customer_id
 LEFT JOIN items_by_order i ON i.order_id = o.order_id
 LEFT JOIN payments_by_order p ON p.order_id = o.order_id
-LEFT JOIN seller_states_by_order ss ON ss.order_id = o.order_id
 WHERE o.order_status = 'delivered'
   AND i.item_count IS NOT NULL;
 
@@ -310,33 +283,4 @@ HAVING COUNT(*) >= 100
 ORDER BY avg_review_score ASC, low_score_pct DESC;
 
 
--- ============================================================
--- LEAKAGE-SAFE MODEL FEATURE VIEWS
--- POST-DELIVERY: bo sung thong tin chi xuat hien sau khi giao.
--- ============================================================
 
-DROP VIEW IF EXISTS v_model_features_post_delivery;
-CREATE VIEW v_model_features_post_delivery AS
-SELECT
-    order_id,
-    review_score AS target_review_score,
-    purchase_hour,
-    purchase_month,
-    customer_state,
-    item_count,
-    distinct_products,
-    seller_count,
-    total_item_price,
-    total_freight,
-    freight_to_price_pct,
-    total_paid,
-    payment_count,
-    max_installments,
-    first_payment_type,
-    voucher_value,
-    delivery_days,
-    estimated_days,
-    delay_days,
-    is_late,
-    same_state_item_pct
-FROM v_review_order_features;

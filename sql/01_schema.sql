@@ -34,10 +34,8 @@ CREATE TABLE IF NOT EXISTS stg_orders (
     delay_days                    INTEGER,
     is_late                       INTEGER,   -- 0/1 (SQLite không có BOOL)
     purchase_year                 INTEGER,
-    purchase_month                INTEGER,
     purchase_year_month           TEXT,
-    purchase_weekday              INTEGER,
-    purchase_hour                 INTEGER
+    purchase_weekday              INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS stg_order_items (
@@ -194,10 +192,8 @@ CREATE TABLE IF NOT EXISTS orders (
     delay_days                    INTEGER DEFAULT 0,
     is_late                       INTEGER DEFAULT 0 CHECK(is_late IN (0, 1)),
     purchase_year                 INTEGER,
-    purchase_month                INTEGER,
     purchase_year_month           TEXT,
     purchase_weekday              INTEGER,
-    purchase_hour                 INTEGER,
     FOREIGN KEY (customer_id)
         REFERENCES customers(customer_id) ON DELETE CASCADE
 );
@@ -282,7 +278,6 @@ CREATE INDEX IF NOT EXISTS idx_products_category ON products(product_category_na
 CREATE INDEX IF NOT EXISTS idx_customers_zip ON customers(customer_zip_code_prefix);
 CREATE INDEX IF NOT EXISTS idx_customers_state ON customers(customer_state);
 CREATE INDEX IF NOT EXISTS idx_sellers_state ON sellers(seller_state);
-
 
 
 
