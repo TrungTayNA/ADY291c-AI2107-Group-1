@@ -33,10 +33,7 @@ items_by_order AS (
         COUNT(DISTINCT product_id) AS distinct_products,
         COUNT(DISTINCT seller_id) AS seller_count,
         SUM(price) AS total_item_price,
-        SUM(freight_value) AS total_freight,
-        SUM(item_total) AS item_total_sum,
-        AVG(price) AS avg_item_price,
-        SUM(CASE WHEN freight_value > 0 THEN 1 ELSE 0 END) > 1 AS multi_freight_item
+        SUM(freight_value) AS total_freight
     FROM order_items
     GROUP BY order_id
 ),
@@ -64,13 +61,7 @@ seller_states_by_order AS (
 )
 SELECT
     o.order_id,
-    c.customer_unique_id,
     c.customer_state,
-    c.customer_city,
-    date(o.order_purchase_timestamp) AS purchase_date,
-    o.order_purchase_timestamp,
-    o.order_delivered_customer_date,
-    o.order_estimated_delivery_date,
     o.purchase_year_month,
     o.purchase_month,
     o.purchase_hour,
@@ -83,8 +74,6 @@ SELECT
     i.seller_count,
     i.total_item_price,
     i.total_freight,
-    i.item_total_sum,
-    i.avg_item_price,
     CASE
         WHEN i.total_item_price > 0
         THEN ROUND(100.0 * i.total_freight / i.total_item_price, 2)
@@ -100,8 +89,7 @@ SELECT
     p.max_installments,
     p.first_payment_type,
     p.voucher_value,
-    r.review_score,
-    r.review_creation_date
+    r.review_score
 FROM orders o
 JOIN ranked_reviews r
   ON r.order_id = o.order_id AND r.review_rank = 1
