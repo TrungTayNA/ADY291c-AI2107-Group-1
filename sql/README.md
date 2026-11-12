@@ -85,9 +85,12 @@ Lưu ý: schema cho phép một `customer_id` có nhiều đơn, nhưng trong da
 | `customer_id` | TEXT | FK→customers | Khóa ngoại khách hàng |
 | `order_status` | TEXT | | Trạng thái đơn hàng từ dữ liệu đã xử lý |
 | `order_purchase_timestamp` | TEXT | | Thời điểm đặt hàng (ISO 8601) |
+| `order_approved_at` | TEXT | | Thời điểm xác nhận đơn |
+| `order_delivered_carrier_date` | TEXT | | Thời điểm bàn giao cho đơn vị vận chuyển |
 | `order_delivered_customer_date` | TEXT | | Ngày giao thực tế |
 | `order_estimated_delivery_date` | TEXT | | Ngày giao dự kiến |
 | `delivery_days` | REAL | | Số ngày giao hàng thực tế |
+| `estimated_days` | REAL | | Số ngày giao hàng dự kiến |
 | `delay_days` | INT | | Số ngày trễ (âm = sớm hơn dự kiến) |
 | `is_late` | INT | | 1 = trễ, 0 = đúng/sớm hạn |
 | `purchase_year` | INT | | Năm mua (feature đã tính sẵn) |
@@ -101,6 +104,7 @@ Lưu ý: schema cho phép một `customer_id` có nhiều đơn, nhưng trong da
 | `order_item_id` | INT | **PK (2/2)** | Số thứ tự sản phẩm trong đơn |
 | `product_id` | TEXT | FK→products | |
 | `seller_id` | TEXT | FK→sellers | |
+| `shipping_limit_date` | TEXT | | Hạn bàn giao cho đơn vị vận chuyển |
 | `price` | REAL | | Giá sản phẩm (đã cap outlier IQR) |
 | `freight_value` | REAL | | Phí vận chuyển |
 | `item_total` | REAL | | `price + freight_value` |
@@ -123,6 +127,8 @@ Lưu ý: schema cho phép một `customer_id` có nhiều đơn, nhưng trong da
 | `review_score` | INT | | Điểm 1–5 ⭐ |
 | `review_comment_title` | TEXT | | Tiêu đề (mặc định "No Title") |
 | `review_comment_message` | TEXT | | Nội dung (mặc định "No Comment") |
+| `review_creation_date` | TEXT | | Thời điểm tạo review |
+| `review_answer_timestamp` | TEXT | | Thời điểm trả lời review |
 | `has_comment` | INT | | 1 = có comment thực, 0 = không |
 
 ### Bảng 6: `products`
@@ -130,7 +136,13 @@ Lưu ý: schema cho phép một `customer_id` có nhiều đơn, nhưng trong da
 |---|---|---|---|
 | `product_id` | TEXT | **PK** | |
 | `product_category_name` | TEXT | FK→product_categories | Tên danh mục (tiếng Bồ Đào Nha) |
+| `product_name_length` | REAL | | Độ dài tên sản phẩm |
+| `product_description_length` | REAL | | Độ dài mô tả sản phẩm |
+| `product_photos_qty` | INT | | Số ảnh sản phẩm |
 | `product_weight_g` | REAL | | Trọng lượng (gram) |
+| `product_length_cm` | REAL | | Chiều dài (cm) |
+| `product_height_cm` | REAL | | Chiều cao (cm) |
+| `product_width_cm` | REAL | | Chiều rộng (cm) |
 | `product_volume_cm3` | REAL | | Thể tích (cm³) |
 
 ### Bảng 7: `sellers`
@@ -159,14 +171,13 @@ Lưu ý: schema cho phép một `customer_id` có nhiều đơn, nhưng trong da
 
 ## 4. Analytical Views
 
-`sql/03_queries.sql` hiện định nghĩa hai view:
+`sql/03_queries.sql` hiện định nghĩa một view:
 
 | View | Mục đích |
 |---|---|
-| `v_review_order_features` | Một dòng mỗi đơn đã giao có review; tổng hợp mặt hàng, thanh toán và người bán theo đơn trước khi JOIN để tránh nhân đôi số liệu. Nếu một đơn có nhiều review, dùng review mới nhất. |
-| `v_model_features_post_delivery` | Tập đặc trưng mô hình sau giao hàng, lấy từ `v_review_order_features` và có thêm thông tin giao hàng như `delivery_days`, `delay_days`, `is_late`. |
+| `v_review_order_features` | Một dòng mỗi đơn đã giao có review và ít nhất một mặt hàng. Tổng hợp mặt hàng, phí vận chuyển, người bán và một số trường thanh toán theo đơn trước khi JOIN để tránh nhân đôi số liệu. Nếu một đơn có nhiều review, dùng review mới nhất. |
 
-`v_model_features_at_purchase`, `view_order_clean` và các view tổng hợp doanh thu/KPI/RFM cũ không được định nghĩa trong các file SQL hiện tại. Notebook hoặc truy vấn cần những view đó phải được cập nhật hoặc cần bổ sung định nghĩa view trước khi chạy.
+`v_model_features_at_purchase`, `v_model_features_post_delivery`, `view_order_clean` và các view tổng hợp doanh thu/KPI/RFM cũ không được định nghĩa trong các file SQL hiện tại. Notebook hoặc truy vấn cần những view đó phải được cập nhật hoặc cần bổ sung định nghĩa view trước khi chạy.
 
 ---
 
@@ -185,7 +196,7 @@ Lưu ý: schema cho phép một `customer_id` có nhiều đơn, nhưng trong da
 | geolocations | 19,010 |
 | **TỔNG** | **553,465** |
 
-Schema tạo 15 index tường minh. Các view được tạo hiện tại: 2.
+Schema tạo 15 index tường minh. View được tạo hiện tại: 1.
 
 ---
 
@@ -199,7 +210,6 @@ import pandas as pd
 conn = sqlite3.connect('scripts/database/olist.db')
 
 df = pd.read_sql_query("SELECT * FROM v_review_order_features LIMIT 5", conn)
-df_model = pd.read_sql_query("SELECT * FROM v_model_features_post_delivery LIMIT 5", conn)
 ```
 
 Ví dụ trên giả định working directory là thư mục gốc của repository.
