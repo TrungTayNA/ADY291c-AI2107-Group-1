@@ -7,7 +7,7 @@ SELECT
     SUM(CASE WHEN delay_days > 0 THEN 1 ELSE 0 END) AS late_orders,
     SUM(CASE WHEN delay_days <= 0 THEN 1 ELSE 0 END) AS on_time_orders,
     SUM(low_review) AS low_review_orders
-FROM olist_model_dataset;
+FROM olist_analysis_dataset;
 
 -- Low review rate for each delivery group (Late vs On time / Early)
 SELECT
@@ -18,6 +18,6 @@ SELECT
     COUNT(*) AS total_orders,
     SUM(low_review) AS low_review_orders,
     ROUND(100.0 * SUM(low_review) / COUNT(*), 2) AS low_review_rate
-FROM olist_model_dataset
+FROM olist_analysis_dataset
 GROUP BY delivery_status
 ORDER BY delivery_status;

@@ -11,12 +11,12 @@ PROJECT_DIR = SCRIPT_DIR.parent
 
 # The CSV is stored in data/processed; Data/ is accepted as an alternative location
 CSV_CANDIDATES = [
-    PROJECT_DIR / "data" / "processed" / "olist_model_dataset.csv",
-    PROJECT_DIR / "Data" / "olist_model_dataset.csv",
+    PROJECT_DIR / "data" / "processed" / "olist_analysis_dataset.csv",
+    PROJECT_DIR / "Data" / "olist_analysis_dataset.csv",
 ]
 CSV_PATH = next((path for path in CSV_CANDIDATES if path.is_file()), None)
 if CSV_PATH is None:
-    raise FileNotFoundError("Khong tim thay olist_model_dataset.csv trong data/processed hoac Data/")
+    raise FileNotFoundError("Khong tim thay olist_analysis_dataset.csv trong data/processed hoac Data/")
 
 DB_PATH = SCRIPT_DIR / "olist_analysis.db"
 
@@ -25,10 +25,10 @@ df = pd.read_csv(CSV_PATH)
 
 # 2. Open (or create) the database and load the table
 conn = sqlite3.connect(DB_PATH)
-df.to_sql("olist_model_dataset", conn, if_exists="replace", index=False)
+df.to_sql("olist_analysis_dataset", conn, if_exists="replace", index=False)
 
 # 3. Check the number of rows inside the database
-rows_in_db = conn.execute("SELECT COUNT(*) FROM olist_model_dataset").fetchone()[0]
+rows_in_db = conn.execute("SELECT COUNT(*) FROM olist_analysis_dataset").fetchone()[0]
 
 # 4. Close the connection
 conn.close()
