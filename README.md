@@ -1,15 +1,30 @@
-# ADY291c_AI2107_GROUP1
+# ADY291c_AI2107_GROUP2
+
+## Team Members
+
+- Phùng Văn Tráng - HE200218(Group leader)
+- Nguyễn Văn Khanh - HE200414
+- Lê Quốc Trung - HE204010
+
+## Technologies
+
+- Python
+- Pandas, NumPy
+- Scikit-learn
+- Matplotlib, Seaborn
+- SQLite
 
 ## Overview
 
-This project analyzes the Olist Brazilian e-commerce dataset using Python, SQL, and Streamlit.
+This project analyzes the Olist Brazilian e-commerce dataset using Python, SQL, and machine learning. It explores delivery delays and customer reviews, visualizes the data, and evaluates models for identifying orders associated with low review scores.
 
 ## Data
-Bộ dữ liệu được sử dụng: [Brazilian E-Commerce Public Dataset by Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
+
+The project uses the [Brazilian E-Commerce Public Dataset by Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce).
 
 ## Python setup (Windows)
 
-The project is tested with Python 3.13. Install Python 3.13 with the official Python Install Manager, then create a virtual environment from the repository root:
+The project uses Python 3.13. Install Python 3.13 with the official Python Install Manager, then create a virtual environment from the repository root:
 
 ```powershell
 py install 3.13
@@ -22,48 +37,90 @@ python -m pip install -r requirements.txt
 
 In VS Code, select the `.venv313` interpreter and choose its Python kernel when opening a notebook.
 
-Run commands from the repository root so the scripts can find the `data` and `sql` directories:
+Run commands from the repository root. The notebooks locate the project folders relative to the repository, and the SQLite import script can also be run from the root:
 
 ```powershell
-# Start the Streamlit dashboard
-streamlit run dashboard\app.py
-
-# Rebuild the SQLite database from cleaned CSV files
-.\.venv313\Scripts\python.exe scripts\database\build_db.py
-
-# Run the SQL business queries (requires data\olist.db)
-python scripts\database\run_queries.py
-
+.\.venv313\Scripts\python.exe SQL_Analysis\import_to_sqlite.py
 ```
 
-`build_db.py` replaces the existing `data\olist.db` after a successful build. The cleaned CSV files must be present in `data\processed` before running it; if they are missing, run the preprocessing notebook in `Notebooks Project`.
+## Technologies
 
-## Present the project with Streamlit
+- Python
+- Pandas, NumPy
+- Scikit-learn
+- Matplotlib, Seaborn
+- SQLite
 
-To start the dashboard without entering a command, double-click `Chay_dashboard.bat` in the project folder. It opens the dashboard in your browser; keep the command window open while presenting, and close it when finished.
+## Project workflow
 
-For the first run on a new computer, complete the one-time Python setup above. You can also start the app manually from a terminal in the project folder:
+Run the notebooks in the following order:
 
-```powershell
-.\.venv313\Scripts\python.exe -m streamlit run dashboard\app.py
+1. **Collect, explore, and preprocess data**
+
+   Open `Notebooks Project/2_DATA COLLECTION, EXPLORATION, AND PREPROCESSING/02_data_collection_exploration_preprocessing.ipynb` and run its cells. The notebook reads the raw CSV files and creates:
+   - `data/processed/olist_model_dataset.csv`
+   - `data/processed/olist_analysis_dataset.csv`
+
+2. **Load data into SQLite**
+
+   Run the import command above after the preprocessing notebook has created `olist_model_dataset.csv`. It creates or replaces the `olist_model_dataset` table in `SQL_Analysis/olist_analysis.db`.
+
+3. **Analyze data with SQL**
+
+   Open `Notebooks Project/3_DATA ANALYSIS USING SQL AND PYTHON/03_sql_analysis.ipynb` to run the SQLite analyses. The related standalone SQL query files are in `SQL_Analysis/`:
+   - `01_delivery_analysis.sql`
+   - `02_item_count_analysis.sql`
+   - `03_delay_group_analysis.sql`
+   - `04_combined_analysis.sql`
+
+4. **Visualize the data**
+
+   Open and run `Notebooks Project/3_DATA ANALYSIS USING SQL AND PYTHON/04_data_visualization.ipynb`. It reads `data/processed/olist_analysis_dataset.csv`.
+
+5. **Train and evaluate prediction models**
+
+   Open and run `Notebooks Project/4_REGRESSION ANALYSIS AND MACHINE LEARNING PREDICTION/05_machine_learning_prediction.ipynb`. It reads `data/processed/olist_model_dataset.csv` and compares Logistic Regression with Random Forest for predicting low reviews.
+
+### Input data
+
+Before running the preprocessing notebook, make sure these Olist CSV files are in `data/raw/`:
+
+- `olist_orders_dataset.csv`
+- `olist_order_items_dataset.csv`
+- `olist_order_reviews_dataset.csv`
+
+Download them from the dataset linked above if they are not already available locally. The preprocessing notebook generates the processed CSV files; rerun it whenever the raw input data changes.
+
+## Project structure
+
+```text
+Notebooks Project/
+  2_DATA COLLECTION, EXPLORATION, AND PREPROCESSING/
+  3_DATA ANALYSIS USING SQL AND PYTHON/
+  4_REGRESSION ANALYSIS AND MACHINE LEARNING PREDICTION/
+SQL_Analysis/
+  01_delivery_analysis.sql
+  02_item_count_analysis.sql
+  03_delay_group_analysis.sql
+  04_combined_analysis.sql
+  import_to_sqlite.py
+data/
+  raw/
+  processed/
+report/
+  figures/
 ```
-
-The Streamlit app is focused only on predicting review risk. Choose whether to predict before or after delivery, enter the order details, and select **Dự đoán nguy cơ review**. Both Random Forest models estimate the risk of a review score of **1–2 stars**; they do not predict an exact 1–5 star score. The serialized models were created with scikit-learn 1.9.1, so that version is pinned in `requirements.txt`. The dashboard does not need the processed CSV files or SQLite database.
-
-## Deploy to Streamlit Community Cloud
-
-1. Push the project to a GitHub repository that your account can administer (for example, your own fork). The deployment needs `dashboard/app.py` and both `.joblib` model files under `Notebooks Project\4_REGRESSION ANALYSIS AND MACHINE LEARNING PREDICTION`.
-2. In Streamlit Community Cloud, create an app from that repository and branch.
-3. Set **Main file path** to `dashboard/app.py` (not `streamlit_app.py`).
-4. In Advanced settings, choose Python 3.13, then deploy. Streamlit installs the dependencies from `requirements.txt`.
 
 ## Team Members
+
 - Phùng Văn Tráng - HE200218
 - Nguyễn Văn Khanh - HE200414
 - Lê Quốc Trung - HE204010
 
 ## Technologies
+
 - Python
 - Pandas, NumPy
 - Scikit-learn
 - Matplotlib, Seaborn
+- SQLite
