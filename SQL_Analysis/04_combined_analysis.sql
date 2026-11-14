@@ -14,6 +14,6 @@ SELECT
     COUNT(*) AS total_orders,
     SUM(low_review) AS low_review_orders,
     ROUND(100.0 * SUM(low_review) / COUNT(*), 2) AS low_review_rate
-FROM olist_model_dataset
+FROM olist_analysis_dataset
 GROUP BY delivery_status, item_group
 ORDER BY delivery_status, item_group;
