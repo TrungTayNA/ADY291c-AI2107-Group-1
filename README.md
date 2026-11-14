@@ -6,14 +6,6 @@
 - Nguyễn Văn Khanh - HE200414
 - Lê Quốc Trung - HE204010
 
-## Technologies
-
-- Python
-- Pandas, NumPy
-- Scikit-learn
-- Matplotlib, Seaborn
-- SQLite
-
 ## Overview
 
 This project analyzes the Olist Brazilian e-commerce dataset using Python, SQL, and machine learning. It explores delivery delays and customer reviews, visualizes the data, and evaluates models for identifying orders associated with low review scores.
@@ -111,16 +103,3 @@ report/
   figures/
 ```
 
-## Team Members
-
-- Phùng Văn Tráng - HE200218
-- Nguyễn Văn Khanh - HE200414
-- Lê Quốc Trung - HE204010
-
-## Technologies
-
-- Python
-- Pandas, NumPy
-- Scikit-learn
-- Matplotlib, Seaborn
-- SQLite
